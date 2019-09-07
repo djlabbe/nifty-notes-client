@@ -1,13 +1,15 @@
 import React, { Component } from "react";
+import { API, Storage } from "aws-amplify";
 import { FormGroup, FormControl, ControlLabel } from "react-bootstrap";
 import LoaderButton from "../components/LoaderButton";
+import { s3Upload } from "../libs/awsLib";
 import config from "../config";
-import { API, Storage } from "aws-amplify";
 import "./Notes.css";
 
 export default class Notes extends Component {
   constructor(props) {
     super(props);
+
     this.file = null;
 
     this.state = {
@@ -35,12 +37,22 @@ export default class Notes extends Component {
         attachmentURL
       });
     } catch (e) {
-      alert(e.message);
+      alert(e);
     }
   }
 
   getNote() {
     return API.get("notes", `/notes/${this.props.match.params.id}`);
+  }
+
+  saveNote(note) {
+    return API.put("notes", `/notes/${this.props.match.params.id}`, {
+      body: note
+    });
+  }
+
+  deleteNote() {
+    return API.del("notes", `/notes/${this.props.match.params.id}`);
   }
 
   validateForm() {
@@ -62,7 +74,10 @@ export default class Notes extends Component {
   };
 
   handleSubmit = async event => {
+    let attachment;
+
     event.preventDefault();
+
     if (this.file && this.file.size > config.MAX_ATTACHMENT_SIZE) {
       alert(
         `Please select a file smaller than ${config.MAX_ATTACHMENT_SIZE /
@@ -72,10 +87,26 @@ export default class Notes extends Component {
     }
 
     this.setState({ isLoading: true });
+
+    try {
+      if (this.file) {
+        attachment = await s3Upload(this.file);
+      }
+
+      await this.saveNote({
+        content: this.state.content,
+        attachment: attachment || this.state.note.attachment
+      });
+      this.props.history.push("/");
+    } catch (e) {
+      alert(e);
+      this.setState({ isLoading: false });
+    }
   };
 
   handleDelete = async event => {
     event.preventDefault();
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this note?"
     );
@@ -85,6 +116,14 @@ export default class Notes extends Component {
     }
 
     this.setState({ isDeleting: true });
+
+    try {
+      await this.deleteNote();
+      this.props.history.push("/");
+    } catch (e) {
+      alert(e);
+      this.setState({ isDeleting: false });
+    }
   };
 
   render() {
@@ -110,16 +149,15 @@ export default class Notes extends Component {
                   >
                     {this.formatFilename(this.state.note.attachment)}
                   </a>
-                </FormControl.Static>{" "}
+                </FormControl.Static>
               </FormGroup>
             )}
             <FormGroup controlId="file">
-              {" "}
               {!this.state.note.attachment && (
                 <ControlLabel>Attachment</ControlLabel>
               )}
               <FormControl onChange={this.handleFileChange} type="file" />
-            </FormGroup>{" "}
+            </FormGroup>
             <LoaderButton
               block
               bsStyle="primary"
@@ -128,8 +166,8 @@ export default class Notes extends Component {
               type="submit"
               isLoading={this.state.isLoading}
               text="Save"
-              loadingText="Saving..."
-            />{" "}
+              loadingText="Saving…"
+            />
             <LoaderButton
               block
               bsStyle="danger"
@@ -137,8 +175,8 @@ export default class Notes extends Component {
               isLoading={this.state.isDeleting}
               onClick={this.handleDelete}
               text="Delete"
-              loadingText="Deleting..."
-            />{" "}
+              loadingText="Deleting…"
+            />
           </form>
         )}
       </div>
