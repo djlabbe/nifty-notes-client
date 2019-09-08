@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import { API, Storage } from "aws-amplify";
 import { FormGroup, FormControl, ControlLabel } from "react-bootstrap";
 import LoaderButton from "../components/LoaderButton";
-import { s3Upload } from "../libs/awsLib";
+import { s3Upload, s3Remove } from "../libs/awsLib";
 import config from "../config";
 import "./Notes.css";
 
@@ -55,6 +55,8 @@ export default class Notes extends Component {
     return API.del("notes", `/notes/${this.props.match.params.id}`);
   }
 
+  deleteAttachment() {}
+
   validateForm() {
     return this.state.content.length > 0;
   }
@@ -91,8 +93,10 @@ export default class Notes extends Component {
     try {
       if (this.file) {
         attachment = await s3Upload(this.file);
+        if (this.state.note.attachment) {
+          await s3Remove(this.state.note.attachment);
+        }
       }
-
       await this.saveNote({
         content: this.state.content,
         attachment: attachment || this.state.note.attachment
@@ -119,6 +123,9 @@ export default class Notes extends Component {
 
     try {
       await this.deleteNote();
+      if (this.state.note.attachment) {
+        await s3Remove(this.state.note.attachment);
+      }
       this.props.history.push("/");
     } catch (e) {
       alert(e);
